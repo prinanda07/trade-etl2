@@ -18,7 +18,8 @@ setup(
         'boto3',
         'fake-awsglue',
         'pyspark',
-        'psycopg2'
+        'psycopg2',
+        'coverage'
     ],
     python_requires='>=3.6',
     zip_safe=False,

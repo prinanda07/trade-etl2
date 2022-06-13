@@ -2,6 +2,7 @@ import re
 
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, to_date
+
 from src.trade_transform.postgres_config import *
 
 
@@ -31,7 +32,8 @@ def read_csv_spark(input_path, sep="|", header="true"):
         .option("header", header) \
         .option("inferschema", "true") \
         .option("quote", "\"") \
-        .option("nullValue", None).option("escape", "\"") \
+        .option("nullValue", None)\
+        .option("escape", "\"") \
         .csv(input_path)
     return df
 

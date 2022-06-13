@@ -3,13 +3,15 @@ import json
 import sys
 from datetime import datetime
 from functools import reduce
+
 from pyspark.sql import Window, DataFrame
 from pyspark.sql.functions import regexp_replace, col, row_number, monotonically_increasing_id
+
 from src.trade_transform import constants
+from src.utils.aws_util import create_s3_files_list_with_matching_pattern, get_files_metadata_from_s3, file_movement
 from src.utils.logger_builder import LoggerBuilder
 from src.utils.params import Params
 from src.utils.postgresDB_util import Database
-from src.utils.python_util import create_files_list_with_matching_pattern, extract_file_metadata, file_movement
 from src.utils.spark_df_util import read_csv_spark, trim_cols, rename_cols, spark, read_postgres, \
     drop_matching_regex_column, \
     write_postgres, cast_date_column
@@ -39,7 +41,7 @@ def main():
     logger.info(f"Trade DB ETL job has started...")
     params = Params(sys.argv)
     env_name = params.get('ENV')
-    client_config_json = get_client_config("ClientFileConfig", env_name)
+    client_config_json = get_client_config('pubic."ClientFileConfig_shree"', env_name)
     try:
         start_time = datetime.now()
         for item in client_config_json:
@@ -52,14 +54,15 @@ def main():
                                                                                     'clientfileconfigid'], item[
                                                                                     'clientid'], item['filetypeid']
 
-            files_list = create_files_list_with_matching_pattern(src_dir, src_filename_pattern)
+            files_list = create_s3_files_list_with_matching_pattern(src_dir, src_filename_pattern)
             data_append = []
             processed_file_list = []
             for file_path in files_list:
                 data_df = read_csv_spark(file_path, ",", header_flag)
                 schema_names_list = list(dict(sorted(schema_names_dict.items())).values())
                 data_col_names_list = trim_cols(data_df).columns
-                file_created_by, file_last_modified_date, created_datetime, file_name = extract_file_metadata(file_path)
+                file_created_by, file_last_modified_date, created_datetime, file_name = get_files_metadata_from_s3(
+                    file_path)
                 insert_query = 'INSERT INTO public."Files" (clientid, filetypeid, filename, filelocation, ' \
                                'filecreatedby, filelastmodifieddate, createddatetime, ' \
                                'lastupdateddatetime, cleintconfigid) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)'
@@ -87,8 +90,8 @@ def main():
                     update_file_table("Rejected", file_name, env_name)
                     file_movement(file_path, "Rejected")
             if bool(data_append):
-                final_df = reduce(DataFrame.unionAll, data_append).withColumn("rownum", row_number()
-                                                                              .over(
+                final_df = reduce(DataFrame.unionByName, data_append).withColumn("rownum", row_number()
+                                                                                 .over(
                     Window.orderBy(monotonically_increasing_id())))
                 write_postgres(final_df, constants.POSTGRES_TABLES_DICT.get(src_filetypeid), env_name)
                 for filenames in processed_file_list:
