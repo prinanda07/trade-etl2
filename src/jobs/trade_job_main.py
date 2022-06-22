@@ -5,13 +5,14 @@ from datetime import datetime
 from functools import reduce
 
 from pyspark.sql import Window, DataFrame
-from pyspark.sql.functions import regexp_replace, col, row_number, monotonically_increasing_id
+from pyspark.sql.functions import regexp_replace, col, row_number, monotonically_increasing_id, when, lit
 
-from src.trade_transform import constants
+from src.trade_transform import constants, postgres_config
 from src.utils.aws_util import create_s3_files_list_with_matching_pattern, get_files_metadata_from_s3, file_movement
 from src.utils.logger_builder import LoggerBuilder
 from src.utils.params import Params
 from src.utils.postgresDB_util import Database
+from src.utils.python_util import read_excel_pandas
 from src.utils.spark_df_util import read_csv_spark, trim_cols, rename_cols, spark, read_postgres, \
     drop_matching_regex_column, \
     write_postgres, cast_date_column
@@ -29,36 +30,60 @@ def get_client_config(postgres_tb_name, env):
     logger.info(f"Reading postgres config table to get the client config for staging load")
     config_df = read_postgres(postgres_tb_name, env)
     config_df_with_req_details = config_df.orderBy(col("clientfileconfigid")) \
+        .withColumn("hasheader", when((col("hasheader") == False) & (col("headerrownumber") == 0), "False")
+                    .when((col("hasheader") == False) & (col("headerrownumber") != 0), "True").otherwise(lit("True")))\
         .withColumn("srcfilepath", regexp_replace(col("srcfilepath"), '\\\\', '/')) \
         .select(col("srcfilepath"), col("filemask"), col("columnstring"), col("hasheader"), col("clientfileconfigid"),
-                col("clientid"), col("filetypeid")) \
+                col("clientid"), col("filetypeid"), col("headerrownumber"), col("textdelimiter")) \
         .repartition(20)
     config_df_json = config_df_with_req_details.toJSON().map(lambda j: json.loads(j)).collect()
     return config_df_json
+
+
+def create_spark_df(src_file_path, src_file_extension, separator, header_row_number):
+    postgres_config.spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
+    actual_header_no = header_row_number - 1
+    if 'xls' in src_file_extension:
+        input_df = read_excel_pandas(src_file_path, engine_name='xlrd', separator=separator,
+                                     header_row_no=actual_header_no)
+    elif 'xlsx' in src_file_extension:
+        input_df = read_excel_pandas(src_file_path, engine_name='openpyxl', separator=separator,
+                                     header_row_no=actual_header_no)
+    elif 'csv' in src_file_extension:
+        input_df = read_csv_spark(src_file_path, sep=separator, header=actual_header_no)
+    else:
+        logger.info("Not a valid source file extension")
+    spark_data_df = spark.createDataFrame(input_df)
+    postgres_config.spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "false")
+    return spark_data_df
 
 
 def main():
     logger.info(f"Trade DB ETL job has started...")
     params = Params(sys.argv)
     env_name = params.get('ENV')
-    client_config_json = get_client_config('pubic."ClientFileConfig_shree"', env_name)
+    client_config_json = get_client_config('public."ClientFileConfig_shree"', env_name)
     try:
         start_time = datetime.now()
         for item in client_config_json:
             src_dir, src_filename_pattern, schema_names_dict, \
-            header_flag, src_clientfileconfigid, src_clientid, src_filetypeid = item['srcfilepath'], \
-                                                                                item['filemask'], \
-                                                                                ast.literal_eval(
-                                                                                    item['columnstring']), \
-                                                                                item['hasheader'], item[
-                                                                                    'clientfileconfigid'], item[
-                                                                                    'clientid'], item['filetypeid']
+            header_flag, src_clientfileconfigid, src_clientid, src_filetypeid, src_header_row_nos, src_delim, src_file_ext = \
+                item['srcfilepath'], \
+                item['filemask'], \
+                ast.literal_eval(
+                    item['columnstring']), \
+                item['hasheader'], item[
+                    'clientfileconfigid'], item[
+                    'clientid'], item['filetypeid'], \
+                int(item['headerrownumber']), item['textdelimiter'].strip(), \
+                item['fileextension']
 
             files_list = create_s3_files_list_with_matching_pattern(src_dir, src_filename_pattern)
             data_append = []
             processed_file_list = []
             for file_path in files_list:
-                data_df = read_csv_spark(file_path, ",", header_flag)
+                # data_df = read_csv_spark(file_path, ",", header_flag)
+                data_df = create_spark_df(file_path, src_file_ext, src_delim, src_header_row_nos)
                 schema_names_list = list(dict(sorted(schema_names_dict.items())).values())
                 data_col_names_list = trim_cols(data_df).columns
                 file_created_by, file_last_modified_date, created_datetime, file_name = get_files_metadata_from_s3(
@@ -95,7 +120,7 @@ def main():
                     Window.orderBy(monotonically_increasing_id())))
                 write_postgres(final_df, constants.POSTGRES_TABLES_DICT.get(src_filetypeid), env_name)
                 for filenames in processed_file_list:
-                    file_movement(f"{src_dir}/{filenames}", "Processed")
+                    file_movement(f"{src_dir}{filenames}", "Processed")
             else:
                 logger.info(f"Data appended list is empty because all the files within {files_list} "
                             f"are being rejected due schema mismatch")

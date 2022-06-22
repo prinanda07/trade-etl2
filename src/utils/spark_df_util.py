@@ -31,11 +31,12 @@ def read_csv_spark(input_path, sep="|", header="true"):
         .option("sep", sep) \
         .option("header", header) \
         .option("inferschema", "true") \
-        .option("quote", "\"") \
         .option("nullValue", None)\
-        .option("escape", "\"") \
+        .option("escape", "\"")\
+        .option("quote", "\"")\
         .csv(input_path)
     return df
+        #.option("multiline", "true")
 
 
 def rename_cols(df, mappings):
@@ -68,3 +69,8 @@ def cast_date_column(input_df: DataFrame, pattern):
     for date_col in casting_col_list:
         input_df = input_df.withColumn(date_col, to_date(col(date_col), 'MM/dd/yyyy'))
     return input_df
+
+# for index, cols in enumerate(data_df.columns):
+#     for map_cols in schema_names_list:
+#         if cols in map_cols:
+#             data_df = data_df.withColumnRenamed(cols, map_cols.lower())
