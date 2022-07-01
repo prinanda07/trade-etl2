@@ -28,11 +28,18 @@ def convert_unix_ts_to_formatted_ts(epoch_time):
 
 
 # 'openpyxl'
-def read_excel_pandas(src_path, engine_name='xlrd', separator=',', header_row_no=None):
-    excel_df = pd.read_excel(src_path, engine=engine_name, delimiter=separator, header=header_row_no)
+def read_excel_pandas(src_path, engine_name='xlrd', header_row_no=None):
+    excel_df = pd.read_excel(src_path, engine=engine_name, header=header_row_no)
     return excel_df
 
 
-def read_csv_pandas(src_path, separator=',', header_row_no=None):
-    csv_df = pd.read_csv(src_path, delimiter=separator, header=header_row_no)
+def read_csv_pandas(src_path, separator=',', header_row_no=None, row_skip=None):
+    csv_df = pd.read_csv(src_path, delimiter=separator, header=header_row_no, skiprows=row_skip)
     return csv_df
+
+
+def extract_as_of_date(file_name: str):
+    r = re.compile("^20")
+    names_list = list(filter(r.match, file_name.split(".")))
+    as_of_date = names_list[0].split("_")[0]
+    return as_of_date

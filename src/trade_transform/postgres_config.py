@@ -1,5 +1,5 @@
 from awsglue.context import GlueContext
-from pyspark.context import SparkContext
+from pyspark import SparkContext
 from src.trade_transform import constants
 from src.utils.aws_util import get_parameter_from_ssm
 

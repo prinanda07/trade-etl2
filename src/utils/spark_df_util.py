@@ -2,6 +2,7 @@ import re
 
 from pyspark.sql import DataFrame
 from pyspark.sql.functions import col, to_date
+from pyspark.sql.types import StringType
 
 from src.trade_transform.postgres_config import *
 
@@ -63,11 +64,18 @@ def drop_matching_regex_column(input_df: DataFrame, pattern):
     return dropped_col_df
 
 
+# def cast_date_column(input_df: DataFrame, pattern):
+#     r = re.compile(pattern)
+#     casting_col_list = list(filter(r.match, input_df.columns))
+#     for date_col in casting_col_list:
+#         input_df = input_df.withColumn(date_col, to_date(col(date_col).cast(StringType()), 'MM/dd/yyyy'))
+#     return input_df
+
 def cast_date_column(input_df: DataFrame, pattern):
     r = re.compile(pattern)
     casting_col_list = list(filter(r.match, input_df.columns))
     for date_col in casting_col_list:
-        input_df = input_df.withColumn(date_col, to_date(col(date_col), 'MM/dd/yyyy'))
+        input_df = input_df.withColumn(date_col, col(date_col).cast(StringType()))
     return input_df
 
 # for index, cols in enumerate(data_df.columns):
