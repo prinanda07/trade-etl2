@@ -89,14 +89,14 @@ def main():
                 data_df = create_spark_df(file_path, src_file_ext, src_delim, src_header_row_nos)
                 file_created_by, file_last_modified_date, created_datetime, file_name = get_files_metadata_from_s3(
                     file_path)
-                data_col_names_list = trim_cols(data_df).columns
                 if 'dat' in src_file_ext:
                     as_of_date = extract_as_of_date(file_name)
                     data_df = data_df.withColumn("asofdate", lit(as_of_date))
                     schema_names_list = list(dict(schema_names_dict.items()).values())
+                    schema_names_list.append("ASOFDATE")
                 else:
                     schema_names_list = list(dict(sorted(schema_names_dict.items())).values())
-
+                data_col_names_list = trim_cols(data_df).columns
                 insert_query = 'INSERT INTO public."Files" (clientid, filetypeid, filename, filelocation, ' \
                                'filecreatedby, filelastmodifieddate, createddatetime, ' \
                                'lastupdateddatetime, cleintconfigid) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)'
