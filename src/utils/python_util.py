@@ -30,12 +30,12 @@ def convert_unix_ts_to_formatted_ts(epoch_time):
 # 'openpyxl'
 def read_excel_pandas(src_path, engine_name='xlrd', header_row_no=None):
     excel_df = pd.read_excel(src_path, engine=engine_name, header=header_row_no)
-    return excel_df
+    return excel_df.dropna().reset_index(drop=True)
 
 
 def read_csv_pandas(src_path, separator=',', header_row_no=None, row_skip=None):
     csv_df = pd.read_csv(src_path, delimiter=separator, header=header_row_no, skiprows=row_skip)
-    return csv_df
+    return csv_df.dropna().reset_index(drop=True)
 
 
 def extract_as_of_date(file_name: str):
@@ -43,3 +43,9 @@ def extract_as_of_date(file_name: str):
     names_list = list(filter(r.match, file_name.split(".")))
     as_of_date = names_list[0].split("_")[0]
     return as_of_date
+
+
+def read_txt_pandas(src_path, header_row_no=None, col_specs='infer', fixed_widths=None):
+    txt_df = pd.read_fwf(src_path, header=header_row_no, colspecs=col_specs, widths=fixed_widths)
+    txt_without_nan_df = txt_df.dropna().reset_index(drop=True)
+    return txt_without_nan_df
