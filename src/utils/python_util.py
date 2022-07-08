@@ -1,4 +1,5 @@
 import glob
+import json
 import os
 import re
 from datetime import datetime
@@ -46,6 +47,16 @@ def extract_as_of_date(file_name: str):
 
 
 def read_txt_pandas(src_path, header_row_no=None, col_specs='infer', fixed_widths=None):
-    txt_df = pd.read_fwf(src_path, header=header_row_no, colspecs=col_specs, widths=fixed_widths)
+    txt_df = pd.read_fwf(src_path, header=header_row_no, colspecs=col_specs, widths=fixed_widths, names=None)
     txt_without_nan_df = txt_df.dropna().reset_index(drop=True)
     return txt_without_nan_df
+
+
+def extract_fixed_width_specs(mapping_json: json):
+    col_specs = []
+    col_names = []
+    for map_cols in mapping_json:
+        pos_tuple = (int(map_cols["start_pos"]), int(map_cols["end_pos"]))
+        col_specs.append(pos_tuple)
+        col_names.append(map_cols["field_mapped_to"])
+    return col_specs, col_names

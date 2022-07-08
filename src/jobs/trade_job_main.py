@@ -1,22 +1,18 @@
-import ast
+import json
 import json
 import sys
 from datetime import datetime
-from functools import reduce
 
-from pyspark.sql import Window, DataFrame
-from pyspark.sql.functions import regexp_replace, col, row_number, monotonically_increasing_id, when, lit
+from pyspark.sql.functions import regexp_replace, col, when
 
-from src.trade_transform import constants, postgres_config
+from src.trade_transform import postgres_config
+from src.trade_transform.tradeDB_fw_ingestion import TradeDBFWIngestion
 from src.trade_transform.tradeDB_ingestion import TradeDBIngestion
-from src.utils.aws_util import create_s3_files_list_with_matching_pattern, get_files_metadata_from_s3, file_movement
 from src.utils.logger_builder import LoggerBuilder
 from src.utils.params import Params
 from src.utils.postgresDB_util import Database
-from src.utils.python_util import read_excel_pandas, read_csv_pandas, extract_as_of_date
-from src.utils.spark_df_util import trim_cols, rename_cols, spark, read_postgres, \
-    drop_matching_regex_column, \
-    write_postgres, cast_date_column
+from src.utils.python_util import read_excel_pandas, read_csv_pandas
+from src.utils.spark_df_util import spark, read_postgres
 
 logger = LoggerBuilder().build()
 
@@ -33,33 +29,19 @@ def get_client_config(postgres_tb_name, env):
     config_df_with_req_details = config_df.orderBy(col("clientfileconfigid")) \
         .withColumn("hasheader", when((col("hasheader") == False) & (col("headerrownumber") == 0), False)
                     .when((col("hasheader") == False) & (col("headerrownumber") != 0), True).otherwise(True)) \
-        .withColumn("srcfilepath", regexp_replace(col("srcfilepath"), '\\\\', '/')) \
+        .withColumn("srcfilepath", regexp_replace(col("srcfilepath"), '\\\\', '/'))
+    config_without_fw_df = config_df_with_req_details.filter(~(col("textdelimiter").isin('fixedwidth', 'FIXEDWIDTH', 'FixedWidth')))\
         .select(col("srcfilepath"), col("filemask"), col("columnstring"), col("hasheader"), col("clientfileconfigid"),
                 col("clientid"), col("filetypeid"), col("headerrownumber"), col("textdelimiter"), col("fileextension")) \
         .repartition(20)
-    config_df_json = config_df_with_req_details.toJSON().map(lambda j: json.loads(j)).collect()
-    return config_df_json
-
-
-def create_spark_df(src_file_path, src_file_extension, separator, header_row_number):
-    postgres_config.spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
-    if header_row_number > 0:
-        actual_header_no = header_row_number - 1
-    else:
-        actual_header_no = None
-    if 'xls' in src_file_extension:
-        input_df = read_excel_pandas(src_file_path, engine_name='xlrd', header_row_no=actual_header_no)
-    elif 'xlsx' in src_file_extension:
-        input_df = read_excel_pandas(src_file_path, engine_name='openpyxl', header_row_no=actual_header_no)
-    elif 'csv' in src_file_extension:
-        input_df = read_csv_pandas(src_file_path, separator=separator, header_row_no=actual_header_no)
-    elif 'dat' in src_file_extension:
-        input_df = read_csv_pandas(src_file_path, separator=separator, row_skip=1)
-    else:
-        logger.info("Not a valid source file extension")
-    spark_data_df = spark.createDataFrame(input_df)
-    postgres_config.spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "false")
-    return spark_data_df
+    config_with_fw_df = config_df_with_req_details.filter(col("textdelimiter").isin('fixedwidth', 'FIXEDWIDTH', 'FixedWidth'))\
+        .select(col("srcfilepath"), col("filemask"), col("hasheader"), col("clientfileconfigid"),
+                col("clientid"), col("filetypeid"), col("headerrownumber"), col("datastartingrownumber"),
+                col("textdelimiter"), col("fileextension")) \
+        .repartition(20)
+    config_without_fw_json = config_without_fw_df.toJSON().map(lambda j: json.loads(j)).collect()
+    config_with_fw_json = config_with_fw_df.toJSON().map(lambda j: json.loads(j)).collect()
+    return config_without_fw_json, config_with_fw_json
 
 
 def main():
@@ -67,11 +49,14 @@ def main():
     # postgres_config.spark.sql("set spark.sql.legacy.timeParserPolicy=LEGACY")
     params = Params(sys.argv)
     env_name = params.get('ENV')
-    client_config_json = get_client_config('public."ClientFileConfig_shree"', env_name)
+    client_config_json, client_config_fw_json = get_client_config('public."ClientFileConfig_shree"', env_name)
+    mapping_tbl_name = params.get('FIXED_WIDTH_TABLE_NAME')
     try:
         start_time = datetime.now()
         trade_s3_processed = TradeDBIngestion(client_config_json)
         trade_s3_processed.process_json(env_name)
+        trade_fw_s3_processed = TradeDBFWIngestion(client_config_fw_json, mapping_tbl_name)
+
         #     for item in client_config_json:
         #         src_dir, src_filename_pattern, schema_names_dict, header_flag, \
         #         src_clientfileconfigid, src_clientid, src_filetypeid, src_header_row_nos, src_delim, src_file_ext = \
