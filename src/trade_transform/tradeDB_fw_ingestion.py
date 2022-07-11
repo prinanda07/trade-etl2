@@ -64,7 +64,7 @@ class TradeDBFWIngestion(object):
                         logger.info(f"Data append list is empty!..Please verify all the fixed width files")
                 else:
                     logger.info(f"Rejected Files list--> {files_list} "
-                                f"due unavailability of records in FixedWidthFieldMapping table")
+                                f"due unavailability of records in {self.fw_map_table_name} table")
                     for path in files_list:
                         file_created_by, file_last_modified_date, created_datetime, rejected_file_name = get_files_metadata_from_s3(
                             path)
