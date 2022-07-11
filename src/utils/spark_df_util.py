@@ -8,6 +8,7 @@ from pyspark.sql.types import StringType
 from src.trade_transform import postgres_config
 from src.trade_transform.postgres_config import *
 from src.utils.logger_builder import LoggerBuilder
+from src.utils.python_util import read_excel_pandas, read_csv_pandas
 
 logger = LoggerBuilder().build()
 
@@ -88,6 +89,8 @@ def cast_date_column(input_df: DataFrame, pattern):
 #     for map_cols in schema_names_list:
 #         if cols in map_cols:
 #             data_df = data_df.withColumnRenamed(cols, map_cols.lower())
+
+
 def create_spark_df(src_file_path, src_file_extension, separator, header_row_number):
     postgres_config.spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
     if header_row_number > 0:
@@ -109,7 +112,7 @@ def create_spark_df(src_file_path, src_file_extension, separator, header_row_num
     return spark_data_df
 
 
-def get_fixedwidth_details(fixedwidth_mapping_tbl_name, filter_value: int, env):
+def get_fixed_width_details(fixedwidth_mapping_tbl_name, filter_value: int, env):
     logger.info(f"Reading postgres {fixedwidth_mapping_tbl_name} table to get the fixed width details")
     mappings_df = read_postgres(fixedwidth_mapping_tbl_name, env)
     sorted_mappings_df = mappings_df.filter(col("client_file_config_id") == filter_value) \

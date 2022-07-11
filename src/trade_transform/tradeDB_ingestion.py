@@ -6,12 +6,13 @@ from functools import reduce
 from pyspark.sql import DataFrame, Window
 from pyspark.sql.functions import lit, row_number, monotonically_increasing_id
 
-from src.jobs.trade_job_main import create_spark_df, update_file_table, logger
+from src.jobs.trade_job_main import update_file_table, logger
 from src.trade_transform import constants
 from src.utils.aws_util import create_s3_files_list_with_matching_pattern, file_movement, get_files_metadata_from_s3
 from src.utils.postgresDB_util import Database
 from src.utils.python_util import extract_as_of_date
-from src.utils.spark_df_util import trim_cols, rename_cols, drop_matching_regex_column, cast_date_column, write_postgres
+from src.utils.spark_df_util import trim_cols, rename_cols, drop_matching_regex_column, cast_date_column, \
+    write_postgres, create_spark_df
 
 
 class TradeDBIngestion(object):

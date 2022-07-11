@@ -46,8 +46,9 @@ def extract_as_of_date(file_name: str):
     return as_of_date
 
 
-def read_txt_pandas(src_path, header_row_no=None, col_specs='infer', fixed_widths=None):
-    txt_df = pd.read_fwf(src_path, header=header_row_no, colspecs=col_specs, widths=fixed_widths, names=None)
+def read_txt_pandas(src_path, header_row_no=None, skip_rows=None, col_specs='infer', fixed_widths=None, col_name=None):
+    txt_df = pd.read_fwf(src_path, header=header_row_no, skiprows=skip_rows, colspecs=col_specs, widths=fixed_widths,
+                         names=col_name)
     txt_without_nan_df = txt_df.dropna().reset_index(drop=True)
     return txt_without_nan_df
 
