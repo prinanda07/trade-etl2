@@ -48,7 +48,7 @@ def main():
     params = Params(sys.argv)
     env_name = params.get('ENV')
     client_config_json, client_config_fw_json = get_client_config('public."ClientFileConfig_shree"', env_name)
-    mapping_tbl_name = params.get('FIXED_WIDTH_TABLE_NAME')
+    mapping_tbl_name = 'public."FixedWidthFieldMapping"' #params.get('FIXED_WIDTH_TABLE_NAME')
     try:
         start_time = datetime.now()
         trade_s3_processed = TradeDBIngestion(client_config_json)
