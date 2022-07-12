@@ -25,7 +25,7 @@ class TradeDBFWIngestion(object):
                 src_filetypeid, src_header_row_nos, src_delim, src_file_ext = \
                     fw_item['srcfilepath'], \
                     fw_item['filemask'], \
-                        fw_item['datastartingrownumber'], \
+                    fw_item['datastartingrownumber'], \
                     fw_item['hasheader'], fw_item[
                         'clientfileconfigid'], fw_item[
                         'clientid'], fw_item['filetypeid'], \
@@ -39,8 +39,8 @@ class TradeDBFWIngestion(object):
                     data_append = []
                     processed_file_list = []
                     for file_path in files_list:
-                        fw_data_df = read_txt_pandas(file_path, skip_rows=skip_row_num-1, col_specs=col_specs,
-                                                  col_name=col_names)
+                        fw_data_df = read_txt_pandas(file_path, skip_rows=skip_row_num - 1, col_specs=col_specs,
+                                                     col_name=col_names)
                         spark_fw_data_df = postgres_config.spark.createDataFrame(fw_data_df)
                         data_append.append(spark_fw_data_df)
                         file_created_by, file_last_modified_date, created_datetime, file_name = get_files_metadata_from_s3(
@@ -73,7 +73,8 @@ class TradeDBFWIngestion(object):
                                        'filecreatedby, filelastmodifieddate, createddatetime, ' \
                                        'lastupdateddatetime, cleintconfigid) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)'
                         ins_values = (
-                            src_clientid, src_filetypeid, rejected_file_name, src_dir, file_created_by, file_last_modified_date,
+                            src_clientid, src_filetypeid, rejected_file_name, src_dir, file_created_by,
+                            file_last_modified_date,
                             created_datetime, datetime.today().strftime('%Y-%m-%d %H:%M:%S'), src_clientfileconfigid,)
                         Database(env_name).execute_query(insert_query, ins_values)
                         update_file_table("Rejected", rejected_file_name, env_name)
