@@ -5,7 +5,7 @@ from functools import reduce
 from pyspark.sql import DataFrame, Window
 from pyspark.sql.functions import row_number, monotonically_increasing_id
 
-from src.trade_transform import constants
+from src.trade_transform import constants, postgres_config
 from src.utils.aws_util import create_s3_files_list_with_matching_pattern, get_files_metadata_from_s3, file_movement
 from src.utils.postgresDB_util import Database
 from src.utils.python_util import extract_fixed_width_specs, read_txt_pandas, update_file_table
@@ -19,6 +19,7 @@ class TradeDBFWIngestion(object):
 
     def process_fw_json(self, env_name):
         try:
+            postgres_config.spark.conf.set("spark.sql.execution.arrow.pyspark.enabled", "true")
             for fw_item in self.fw_json:
                 src_dir, src_filename_pattern, skip_row_num, header_flag, src_clientfileconfigid, src_clientid, \
                 src_filetypeid, src_header_row_nos, src_delim, src_file_ext = \
@@ -38,9 +39,10 @@ class TradeDBFWIngestion(object):
                     data_append = []
                     processed_file_list = []
                     for file_path in files_list:
-                        data_df = read_txt_pandas(file_path, skip_rows=skip_row_num-1, col_specs=col_specs,
+                        fw_data_df = read_txt_pandas(file_path, skip_rows=skip_row_num-1, col_specs=col_specs,
                                                   col_name=col_names)
-                        data_append.append(data_df)
+                        spark_fw_data_df = postgres_config.spark.createDataFrame(fw_data_df)
+                        data_append.append(spark_fw_data_df)
                         file_created_by, file_last_modified_date, created_datetime, file_name = get_files_metadata_from_s3(
                             file_path)
                         insert_query = 'INSERT INTO public."Files" (clientid, filetypeid, filename, filelocation, ' \
