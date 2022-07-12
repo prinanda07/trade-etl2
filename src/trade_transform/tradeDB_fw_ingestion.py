@@ -5,12 +5,11 @@ from functools import reduce
 from pyspark.sql import DataFrame, Window
 from pyspark.sql.functions import row_number, monotonically_increasing_id
 
-from src.jobs.trade_job_main import logger, update_file_table
 from src.trade_transform import constants
 from src.utils.aws_util import create_s3_files_list_with_matching_pattern, get_files_metadata_from_s3, file_movement
 from src.utils.postgresDB_util import Database
-from src.utils.python_util import extract_fixed_width_specs, read_txt_pandas
-from src.utils.spark_df_util import get_fixed_width_details, write_postgres
+from src.utils.python_util import extract_fixed_width_specs, read_txt_pandas, update_file_table
+from src.utils.spark_df_util import get_fixed_width_details, write_postgres, logger
 
 
 class TradeDBFWIngestion(object):

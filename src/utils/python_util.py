@@ -7,6 +7,7 @@ from datetime import datetime
 import pandas as pd
 
 from src.utils.logger_builder import LoggerBuilder
+from src.utils.postgresDB_util import Database
 
 logger = LoggerBuilder().build()
 
@@ -61,3 +62,9 @@ def extract_fixed_width_specs(mapping_json: json):
         col_specs.append(pos_tuple)
         col_names.append(map_cols["field_mapped_to"])
     return col_specs, col_names
+
+
+def update_file_table(status, file_name, env):
+    update_sql = 'UPDATE public."Files" SET processstatus = %s where filename = %s'
+    up_values = (status, file_name,)
+    Database(env).execute_query(update_sql, up_values)

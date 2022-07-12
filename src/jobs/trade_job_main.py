@@ -8,16 +8,9 @@ from src.trade_transform.tradeDB_fw_ingestion import TradeDBFWIngestion
 from src.trade_transform.tradeDB_ingestion import TradeDBIngestion
 from src.utils.logger_builder import LoggerBuilder
 from src.utils.params import Params
-from src.utils.postgresDB_util import Database
 from src.utils.spark_df_util import spark, read_postgres
 
 logger = LoggerBuilder().build()
-
-
-def update_file_table(status, file_name, env):
-    update_sql = 'UPDATE public."Files" SET processstatus = %s where filename = %s'
-    up_values = (status, file_name,)
-    Database(env).execute_query(update_sql, up_values)
 
 
 def get_client_config(postgres_tb_name, env):
