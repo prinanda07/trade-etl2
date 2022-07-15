@@ -3,13 +3,13 @@ from datetime import datetime
 from functools import reduce
 
 from pyspark.sql import DataFrame, Window
-from pyspark.sql.functions import row_number, monotonically_increasing_id
+from pyspark.sql.functions import row_number, monotonically_increasing_id, col, lit
 
 from src.trade_transform import constants, postgres_config
 from src.utils.aws_util import create_s3_files_list_with_matching_pattern, get_files_metadata_from_s3, file_movement
 from src.utils.postgresDB_util import Database
 from src.utils.python_util import extract_fixed_width_specs, read_txt_pandas, update_file_table
-from src.utils.spark_df_util import get_fixed_width_details, write_postgres, logger
+from src.utils.spark_df_util import get_fixed_width_details, write_postgres, logger, read_postgres
 
 
 class TradeDBFWIngestion(object):
@@ -42,7 +42,6 @@ class TradeDBFWIngestion(object):
                         fw_data_df = read_txt_pandas(file_path, skip_rows=skip_row_num - 1, col_specs=col_specs,
                                                      col_name=col_names)
                         spark_fw_data_df = postgres_config.spark.createDataFrame(fw_data_df)
-                        data_append.append(spark_fw_data_df)
                         file_created_by, file_last_modified_date, created_datetime, file_name = get_files_metadata_from_s3(
                             file_path)
                         insert_query = 'INSERT INTO public."Files" (clientid, filetypeid, filename, filelocation, ' \
@@ -52,6 +51,12 @@ class TradeDBFWIngestion(object):
                             src_clientid, src_filetypeid, file_name, src_dir, file_created_by, file_last_modified_date,
                             created_datetime, datetime.today().strftime('%Y-%m-%d %H:%M:%S'), src_clientfileconfigid,)
                         Database(env_name).execute_query(insert_query, ins_values)
+                        files_id = \
+                            read_postgres('public."Files"', env_name).filter(col("filename") == file_name).select(
+                                col('fileid')).collect()[0].asDict()['fileid']
+                        id_df = spark_fw_data_df.withColumn("fileid", lit(files_id)) \
+                            .withColumn("clientid", lit(src_clientid))
+                        data_append.append(id_df)
                         update_file_table("InStage", file_name, env_name)
                         processed_file_list.append(file_name)
                     if bool(data_append):

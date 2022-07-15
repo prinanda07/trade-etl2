@@ -4,14 +4,14 @@ from datetime import datetime
 from functools import reduce
 
 from pyspark.sql import DataFrame, Window
-from pyspark.sql.functions import lit, row_number, monotonically_increasing_id
+from pyspark.sql.functions import lit, row_number, monotonically_increasing_id, col
 
 from src.trade_transform import constants
 from src.utils.aws_util import create_s3_files_list_with_matching_pattern, file_movement, get_files_metadata_from_s3
 from src.utils.postgresDB_util import Database
 from src.utils.python_util import extract_as_of_date, logger, update_file_table
 from src.utils.spark_df_util import trim_cols, rename_cols, drop_matching_regex_column, cast_date_column, \
-    write_postgres, create_spark_df
+    write_postgres, create_spark_df, read_postgres
 
 
 class TradeDBIngestion(object):
@@ -57,17 +57,24 @@ class TradeDBIngestion(object):
                     Database(env_name).execute_query(insert_query, ins_values)
 
                     if len(data_col_names_list) == len(schema_names_list):
+                        files_id = \
+                            read_postgres('public."Files"', env_name).filter(col("filename") == file_name).select(
+                                col('fileid')).collect()[0].asDict()['fileid']
                         if header_flag:
                             renamed_with_schema_df = rename_cols(data_df, schema_names_dict)
                             drop_unknown_field_df = drop_matching_regex_column(renamed_with_schema_df, ".*unknown*")
                             casted_df = cast_date_column(drop_unknown_field_df, ".*date*")
-                            data_append.append(casted_df)
+                            id_df = casted_df.withColumn("fileid", lit(files_id))\
+                                .withColumn("clientid", lit(src_clientid))
+                            data_append.append(id_df)
 
                         elif not header_flag:
                             data_with_schema_df = rename_cols(data_df, schema_names_list)
                             drop_unknown_field_df = drop_matching_regex_column(data_with_schema_df, ".*unknown*")
                             casted_df = cast_date_column(drop_unknown_field_df, ".*date*")
-                            data_append.append(casted_df)
+                            id_df = casted_df.withColumn("fileid", lit(files_id)) \
+                                .withColumn("clientid", lit(src_clientid))
+                            data_append.append(id_df)
 
                         update_file_table("InStage", file_name, env_name)
                         processed_file_list.append(file_name)
